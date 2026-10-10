@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TransitConnect Amdavad-Gandhinagar | Public Transport Hub</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        #map { height: 450px; width: 100%; border-radius: 0.75rem; z-index: 10; }
+        #full-map { height: 550px; width: 100%; border-radius: 0.75rem; z-index: 10; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg shadow-indigo-500/30">
+                    <i class="fa-solid fa-train-subway text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-white">TransitConnect</h1>
+                    <p class="text-xs text-indigo-400 font-medium">Amdavad & Gandhinagar Multi-Modal Transit System (Java MVC)</p>
+                </div>
+            </div>
+            <nav class="flex gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+                <button onclick="switchTab('planner')" id="btn-planner" class="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white transition">Route Planner</button>
+                <button onclick="switchTab('map')" id="btn-map" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white transition">Live Map</button>
+                <button onclick="switchTab('explorer')" id="btn-explorer" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white transition">Timings & Fares</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6">
+        <!-- TAB 1: PLANNER -->
+        <div id="tab-planner" class="space-y-6">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                <h2 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-route text-indigo-400"></i> Plan Your Journey</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Source Station / Area</label>
+                        <input type="text" id="origin" value="GNLU" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Destination Station / Area</label>
+                        <input type="text" id="destination" value="GIFT City" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                </div>
+                <div class="mt-4 flex flex-wrap gap-3">
+                    <button onclick="fetchRoute()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 py-3 rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-600/30">
+                        <i class="fa-solid fa-magnifying-glass"></i> Find Best Route
+                    </button>
+                    <button onclick="setPreset('GNLU', 'GIFT City')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-4 py-3 rounded-xl transition text-sm">
+                        GNLU ➔ GIFT City (Violet Line)
+                    </button>
+                    <button onclick="setPreset('Paldi', 'PDPU')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-4 py-3 rounded-xl transition text-sm">
+                        Paldi ➔ PDPU
+                    </button>
+                    <button onclick="setPreset('Kalupur Railway Station', 'Sector 21')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-4 py-3 rounded-xl transition text-sm">
+                        Kalupur ➔ Sector 21
+                    </button>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div id="results-container" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+                    <h3 class="text-md font-bold text-slate-200">Trip Summary</h3>
+                    <div class="grid grid-cols-3 gap-2 bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
+                        <div>
+                            <p class="text-xs text-slate-400">Total Time</p>
+                            <p id="sum-time" class="text-lg font-bold text-indigo-400">9m</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-400">Walking</p>
+                            <p id="sum-walk" class="text-lg font-bold text-emerald-400">200m</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-400">Total Fare</p>
+                            <p id="sum-fare" class="text-lg font-bold text-amber-400">₹10</p>
+                        </div>
+                    </div>
+                    <div id="legs-list" class="space-y-3"></div>
+                </div>
+                <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                    <h3 class="text-md font-bold text-slate-200 mb-4">Route Corridor & Station Map</h3>
+                    <div id="map"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: MAP -->
+        <div id="tab-map" class="hidden space-y-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                <h2 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-map text-indigo-400"></i> Amdavad & Gandhinagar Transit Network Map</h2>
+                <div id="full-map"></div>
+            </div>
+        </div>
+
+        <!-- TAB 3: EXPLORER -->
+        <div id="tab-explorer" class="hidden space-y-6">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                <h2 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-compass text-indigo-400"></i> Transport Services & Timings</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                        <h3 class="font-bold text-purple-400 mb-2"><i class="fa-solid fa-train"></i> GMRC Metro & Violet Line</h3>
+                        <p class="text-xs text-slate-300">Blue, Red, Yellow lines + Violet (Purple) Branch connecting GNLU to GIFT City via PDEU.</p>
+                        <p class="text-xs text-emerald-400 mt-2">Frequency: Every 8-10 mins | Fare: ₹5 - ₹35</p>
+                    </div>
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                        <h3 class="font-bold text-indigo-400 mb-2"><i class="fa-solid fa-bus"></i> Gandhinagar Parivahan</h3>
+                        <p class="text-xs text-slate-300">Connects Ahmedabad (Motera/Ranip) to Gandhinagar Sectors every 30 mins sharp.</p>
+                        <p class="text-xs text-emerald-400 mt-2">Frequency: Every 30 mins sharp | Fare: ₹15 - ₹30</p>
+                    </div>
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                        <h3 class="font-bold text-indigo-400 mb-2"><i class="fa-solid fa-charging-station"></i> Gandhinagar PM E-Bus</h3>
+                        <p class="text-xs text-slate-300">Zero-emission electric city feeder buses across Gandhinagar info-cities.</p>
+                        <p class="text-xs text-emerald-400 mt-2">Frequency: Every 15 mins | Flat Fare: ₹10</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map, fullMap;
+
+        function switchTab(tab) {
+            document.getElementById('tab-planner').classList.add('hidden');
+            document.getElementById('tab-map').classList.add('hidden');
+            document.getElementById('tab-explorer').classList.add('hidden');
+
+            document.getElementById('btn-planner').className = "px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white transition";
+            document.getElementById('btn-map').className = "px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white transition";
+            document.getElementById('btn-explorer').className = "px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white transition";
+
+            if (tab === 'planner') {
+                document.getElementById('tab-planner').classList.remove('hidden');
+                document.getElementById('btn-planner').className = "px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white transition";
+                if(map) map.invalidateSize();
+            } else if (tab === 'map') {
+                document.getElementById('tab-map').classList.remove('hidden');
+                document.getElementById('btn-map').className = "px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white transition";
+                initFullMap();
+            } else if (tab === 'explorer') {
+                document.getElementById('tab-explorer').classList.remove('hidden');
+                document.getElementById('btn-explorer').className = "px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white transition";
+            }
+        }
+
+        function setPreset(orig, dest) {
+            document.getElementById('origin').value = orig;
+            document.getElementById('destination').value = dest;
+            fetchRoute();
+        }
+
+        async function fetchRoute() {
+            const origin = document.getElementById('origin').value;
+            const destination = document.getElementById('destination').value;
+
+            try {
+                const response = await fetch(`/api/route?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`);
+                const data = await response.json();
+
+                document.getElementById('results-container').classList.remove('hidden');
+                document.getElementById('sum-time').innerText = data.totalDurationMinutes + 'm';
+                document.getElementById('sum-walk').innerText = data.totalWalkingDistanceMeters + 'm';
+                document.getElementById('sum-fare').innerText = '₹' + data.totalFareINR;
+
+                const legsList = document.getElementById('legs-list');
+                legsList.innerHTML = '';
+
+                data.itinerary.forEach((leg) => {
+                    const icon = leg.mode === 'METRO' ? 'fa-train' : (leg.mode === 'WALK' ? 'fa-person-walking' : 'fa-bus');
+                    const color = leg.mode === 'METRO' ? 'text-purple-400' : (leg.mode === 'WALK' ? 'text-emerald-400' : 'text-amber-400');
+                    
+                    legsList.innerHTML += `
+                        <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs space-y-1">
+                            <div class="flex justify-between font-bold text-slate-200">
+                                <span class="flex items-center gap-1.5"><i class="fa-solid ${icon} ${color}"></i> ${leg.mode}: ${leg.line}</span>
+                                <span class="text-slate-300 font-semibold">${leg.durationMinutes}m | ₹${leg.fareRupees}</span>
+                            </div>
+                            <p class="text-slate-400">${leg.startStation} ➔ ${leg.endStation}</p>
+                            <p class="text-slate-500 italic">${leg.instruction}</p>
+                        </div>
+                    `;
+                });
+
+                initMap(data);
+            } catch (err) {
+                console.error('Error fetching route:', err);
+            }
+        }
+
+        function initMap(data) {
+            if (map) {
+                map.remove();
+            }
+            const coords = data.coordinates && data.coordinates.length > 0 ? data.coordinates : [[23.1543, 72.6475], [23.1534, 72.6856]];
+            const centerLat = (coords[0][0] + coords[coords.length-1][0]) / 2;
+            const centerLng = (coords[0][1] + coords[coords.length-1][1]) / 2;
+
+            map = L.map('map').setView([centerLat, centerLng], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+
+            L.polyline(coords, { color: '#a855f7', weight: 5 }).addTo(map);
+            L.marker(coords[0]).addTo(map).bindPopup("<b>Origin:</b> " + data.origin);
+            L.marker(coords[coords.length - 1]).addTo(map).bindPopup("<b>Destination:</b> " + data.destination);
+        }
+
+        function initFullMap() {
+            if (fullMap) {
+                fullMap.invalidateSize();
+                return;
+            }
+            fullMap = L.map('full-map').setView([23.15, 72.62], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(fullMap);
+
+            const stations = [
+                { name: "Paldi Metro Station", coords: [23.0185, 72.5622], line: "Red Line" },
+                { name: "Kalupur Railway Station", coords: [23.0251, 72.6031], line: "Blue Line" },
+                { name: "Old High Court (Interchange)", coords: [23.0373, 72.5670], line: "Blue/Red Interchange" },
+                { name: "Motera Stadium (Interchange)", coords: [23.0965, 72.6008], line: "Red/Yellow Interchange" },
+                { name: "GNLU Station (Interchange)", coords: [23.1543, 72.6475], line: "Yellow & Violet Line" },
+                { name: "GIFT City Station", coords: [23.1534, 72.6856], line: "Violet (Purple) Line Terminal" },
+                { name: "Sector 21 Gandhinagar", coords: [23.2384, 72.6412], line: "Yellow Line & Parivahan Bus Hub" }
+            ];
+
+            stations.forEach(s => {
+                L.marker(s.coords).addTo(fullMap).bindPopup(`<b>${s.name}</b><br>Type: ${s.line}`);
+            });
+        }
+
+        window.onload = () => {
+            fetchRoute();
+        };
+    </script>
+</body>
+</html>
